@@ -20,6 +20,8 @@
 #include "ScriptedCreature.h"
 #include "SpellAuras.h"
 #include "icecrown_citadel.h"
+#include "Group.h"
+#include "MapManager.h"
 
 enum ScriptTexts
 {
@@ -46,6 +48,10 @@ enum Spells
     SPELL_VILE_GAS              = 69240,
     SPELL_INOCULATED            = 69291,
 
+	//Prof Spells fürn HC
+	SPELL_MALLEABLE_GOO			= 72296,
+	SPELL_MALLEABLE_GOO_SUMMON  = 72299,
+
     // Stinky
     SPELL_MORTAL_WOUND          = 71127,
     SPELL_DECIMATE              = 71123,
@@ -69,6 +75,9 @@ enum Events
 
     EVENT_DECIMATE      = 6,
     EVENT_MORTAL_WOUND  = 7,
+
+	//Alle 30 Sek. ein Schleim.
+	EVENT_GOO			= 8,
 };
 
 enum Misc
@@ -96,6 +105,13 @@ class boss_festergut : public CreatureScript
                 me->SetReactState(REACT_DEFENSIVE);
                 events.ScheduleEvent(EVENT_BERSERK, 300000);
                 events.ScheduleEvent(EVENT_INHALE_BLIGHT, urand(25000, 30000));
+				//Prof wirft Schleim alle 30 sek, nur im HC
+				if (IsHeroic())
+				{
+					events.ScheduleEvent(EVENT_GOO, urand(13000, 18000));
+					_lastGUID = NULL;
+				}
+
                 events.ScheduleEvent(EVENT_GAS_SPORE, urand(20000, 25000));
                 events.ScheduleEvent(EVENT_GASTRIC_BLOAT, urand(12500, 15000));
                 _maxInoculatedStack = 0;
@@ -203,7 +219,53 @@ class boss_festergut : public CreatureScript
 
                             events.ScheduleEvent(EVENT_INHALE_BLIGHT, urand(33500, 35000));
                             break;
-                        }
+						}
+
+						//FIX: Prof wirft Castzeit auf Spieler
+						case EVENT_GOO:
+						{
+							if (Creature* professor = ObjectAccessor::GetCreature(*me, instance->GetData64(DATA_PROFESSOR_PUTRICIDE)))
+							{
+								if (Is25ManRaid())
+								{
+									for (int i = 0; i < 2; i++)
+									{
+										Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 0.0f, true);
+										if (target && _lastGUID != target->GetGUID()) //Erstes Target gefunden:
+										{
+											professor->AI()->DoCast(target, SPELL_MALLEABLE_GOO);
+											events.RescheduleEvent(EVENT_GOO, 10000 + urand(0, 5000));
+											_lastGUID = target->GetGUID();
+										}
+										else //Kein Target gefunden ODER schon das erste Target gefunden. (Der Fall kein Target wird ignoriert, da dann keine Spieler da wären.
+										{
+											Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 0.0f, true);
+											if (target && _lastGUID != target->GetGUID()) //Zweites Target gefunden:
+											{
+												professor->AI()->DoCast(target, SPELL_MALLEABLE_GOO);
+												events.RescheduleEvent(EVENT_GOO, 10000 + urand(0, 5000));
+											}
+											_lastGUID = 0;
+											// Es wurde schon ein Schleim geworfen / kein Ziel gefunden -> Reset, da sonst die schleime aufhören zu spawnen
+
+											// Es besteht die Chance von 1/625 (0,16%) (Bei 25 Spielern, 1/(Anzahl der Spieler im Kampf * Anzahl der Spieler im Kampf)),
+											// dass nur ein Schleim geworfen wird,
+											// da zweimal das selbe Ziel ausgewählt wurde. Dies wird hier vernachlässigt.
+											// Könnte durch noch ein Target-Auswähl Versuch auf 0,0064% verringert werden (1/15625)
+										}
+									}
+								}
+								else
+								{
+									if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 0.0f, true))
+									{
+										professor->AI()->DoCast(target, SPELL_MALLEABLE_GOO);
+										events.RescheduleEvent(EVENT_GOO, 30000 + urand(0, 5000));
+									}
+								}
+							}
+							break;
+						}
                         case EVENT_VILE_GAS:
                         {
                             std::list<Unit*> ranged, melee;
@@ -281,6 +343,7 @@ class boss_festergut : public CreatureScript
             uint64 _gasDummyGUID;
             uint32 _maxInoculatedStack;
             uint32 _inhaleCounter;
+			uint64 _lastGUID;
         };
 
         CreatureAI* GetAI(Creature* creature) const OVERRIDE

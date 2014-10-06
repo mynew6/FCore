@@ -46,6 +46,7 @@
 #include "Player.h"
 #include "QuestDef.h"
 #include "ReputationMgr.h"
+#include "ScriptedCreature.h"
 #include "SpellAuraEffects.h"
 #include "SpellAuras.h"
 #include "Spell.h"
@@ -3463,7 +3464,7 @@ void Unit::_UnapplyAura(AuraApplicationMap::iterator &i, AuraRemoveMode removeMo
     ASSERT(!aurApp->GetEffectMask());
 
     // Remove totem at next update if totem loses its aura
-    if (aurApp->GetRemoveMode() == AURA_REMOVE_BY_EXPIRE && GetTypeId() == TYPEID_UNIT && ToCreature()->IsTotem()&& ToTotem()->GetSummonerGUID() == aura->GetCasterGUID())
+    if (aurApp->GetRemoveMode() == AURA_REMOVE_BY_EXPIRE && GetTypeId() == TYPEID_UNIT && ToCreature()->IsTotem())
     {
         if (ToTotem()->GetSpell() == aura->GetId() && ToTotem()->GetTotemType() == TOTEM_PASSIVE)
             ToTotem()->setDeathState(JUST_DIED);
@@ -10854,6 +10855,32 @@ uint32 Unit::SpellHealingBonusTaken(Unit* caster, SpellInfo const* spellProto, u
     float maxval = float(GetMaxPositiveAuraModifier(SPELL_AURA_MOD_HEALING_PCT));
     if (maxval)
         AddPct(TakenTotalMod, maxval);
+
+	/*
+		HACKFIX: Rotface Plague does not have Healreduce, adding it here.
+	*/
+	if (spellProto->Id == -69674) //Mutated Infection
+	{
+		if (InstanceScript* const instance = caster->GetInstanceScript())
+		{
+			if (Creature* rotface = Unit::GetCreature(*caster, instance->GetData64(5))) //5 == Rotface
+			{
+				BossAI* ai = (BossAI*)rotface->GetAI();
+				if (ai->IsHeroic())
+				{
+					AddPct(TakenTotalMod, -75); //75% Heal reduce in HC
+				}
+				else
+				{
+					AddPct(TakenTotalMod, -50); //75% Heal reduce in HC
+				}
+			}
+				
+		}
+	}
+	/*
+		FIX: END
+	*/
 
     // Tenacity increase healing % taken
     if (AuraEffect const* Tenacity = GetAuraEffect(58549, 0))

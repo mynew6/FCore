@@ -2240,6 +2240,9 @@ void AuraEffect::HandleAuraModDisarm(AuraApplication const* aurApp, uint8 mode, 
     if (!apply)
         target->RemoveFlag(field, flag);
 
+	if (apply && target->HasAura(46924))
+		target->RemoveAura(46924);
+
     // Handle damage modification, shapeshifted druids are not affected
     if (target->GetTypeId() == TYPEID_PLAYER && !target->IsInFeralForm())
     {
@@ -5896,6 +5899,16 @@ void AuraEffect::HandlePeriodicDamageAurasTick(Unit* target, Unit* caster) const
     damage = (damage <= absorb+resist) ? 0 : (damage-absorb-resist);
     if (damage)
         procVictim |= PROC_FLAG_TAKEN_DAMAGE;
+
+    if (damage > 0)
+        {
+            if (target->HasAura(65220) || target->HasAura(32233) || target->HasAura(63623) || target->HasAura(62137))
+            {
+                if (GetCaster()->GetTypeId() == TYPEID_UNIT)
+                    damage = int32(float(damage) / 100 * 10);
+                resist -= damage;
+            }
+        }
 
     int32 overkill = damage - target->GetHealth();
     if (overkill < 0)
